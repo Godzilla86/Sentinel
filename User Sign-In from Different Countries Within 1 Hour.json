@@ -1,0 +1,76 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/49e5e6b3-bdd4-447e-bd7f-d75486c5a84a')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/49e5e6b3-bdd4-447e-bd7f-d75486c5a84a')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "User Sign-In from Different Countries Within 1 Hour",
+                "description": "Detects if a use have performed an impossible sign in by traveling to a different country with in less than 1 hour. This is typically a indication of a possible compromise of a breached user or a user actively using VPN.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "SigninLogs\r\n| where ResultSignature == \"SUCCESS\" //Only shows successful sign-ins.\r\n| sort by UserPrincipalName asc, TimeGenerated asc //Organises logs to group by user and time generated in order.\r\n| serialize //locks rows in order\r\n| extend PreviousUser = prev(UserPrincipalName)//Defines PreviousUser to have the ability to look at the previous value of UserPrincipalName in the previous sign in log.\r\n| extend PreviousLocation = prev(Location) //Defines PreviousLocation to have the ability look at the value of Location in previous sign in log.\r\n| extend PreviousTime = prev(TimeGenerated) //Defines PreviousTime to have the ability to look at the value of TimeGenerated in the previous sign in log.\r\n| where isnotempty(PreviousLocation) //Ensures that the previous location has a value and is not empty.\r\n| where UserPrincipalName == PreviousUser //Ensures that the user matches the previous user value.\r\n| where Location != PreviousLocation //Ensures that only sign in logs the don't match previous sign in locations.\r\n| extend TimeDifference = (TimeGenerated - PreviousTime) //Defines TimeDifference to have the ability to look at the most recent sign in time and subtract the previous recent sign in time.\r\n| where TimeDifference < 1h //Filters logs to only show sign in with less than a 1hr time span\r\n| project TimeGenerated, UserPrincipalName, PreviousLocation, Location, PreviousTime, TimeDifference",
+                "queryFrequency": "PT5M",
+                "queryPeriod": "PT2H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "InitialAccess"
+                ],
+                "techniques": [],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT2H",
+                        "matchingMethod": "Selected",
+                        "groupByEntities": [
+                            "Account"
+                        ],
+                        "groupByAlertDetails": [
+                            "DisplayName"
+                        ],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "Impossible Sign-In Activity {{{UserPrincipalName}} ",
+                    "alertDescriptionFormat": "This alert detects a user signing in from two different countries within a short time window (less than 1 hour), indicating potential credential compromise or VPN usage.\n\nPrevious Location: {{PreviousLocation}}\nNew Location: {{Location}}\nTime Difference : {{{TimeDifference}} \n\nInvestigate whether the activity is legitimate (VPN, travel) or suspicious (account compromise).",
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {},
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "UserPrincipalName"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}
