@@ -1,0 +1,24 @@
+//Listed outsourced staff exclusions
+let PhilippinesUsers = dynamic(["enterupn@here.com"]); //Defines users listed in Philippines.
+let HomeCountry = "PH"; //Set home country to be Philippines.
+let VMCountry = "AU"; //Set Australia to be allowed as our Windows 365 are located in Australia.
+SigninLogs
+| where ResultSignature == "SUCCESS" //Only shows successful sign-ins.
+| sort by UserPrincipalName asc, TimeGenerated asc //Organises logs to group by user and time generated in order.
+| serialize //locks rows in order
+| extend PreviousUser = prev(UserPrincipalName)//Defines PreviousUser to have the ability to look at the previous value of UserPrincipalName in the previous sign in log.
+| extend PreviousLocation = prev(Location) //Defines PreviousLocation to have the ability look at the value of Location in previous sign in log.
+| extend PreviousTime = prev(TimeGenerated) //Defines PreviousTime to have the ability to look at the value of TimeGenerated in the previous sign in log.
+| where isnotempty(PreviousLocation) //Ensures that the previous location has a value and is not empty.
+| where UserPrincipalName == PreviousUser //Ensures that the user matches the previous user value.
+| where Location != PreviousLocation //Ensures that only sign in logs the don't match previous sign in locations.
+| extend TimeDifference = (TimeGenerated - PreviousTime) //Defines TimeDifference to have the ability to look at the most recent sign in time and subtract the previous recent sign in time.
+| where TimeDifference < 1h //Filters logs to only show sign in with less than a 1hr time span
+| where not (
+    UserPrincipalName in (PhilippinesUsers)
+    and (
+        (PreviousLocation has HomeCountry and Location has VMCountry) or
+        (PreviousLocation has VMCountry and Location has HomeCountry
+        )
+    ))
+| project TimeGenerated, UserPrincipalName, PreviousLocation, Location, PreviousTime, TimeDifference
