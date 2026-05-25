@@ -82,3 +82,12 @@ Enter the Logic App and configure your choice of email for the Outlook 365 conne
 <img width="619" height="364" alt="image" src="https://github.com/user-attachments/assets/6f004c0d-9d77-4888-ab4b-eb4c5ed50741" />
 
 Next we need to authorize the managed identity running the HTTP request to pull data from Defender and enrich the email. Run the script found in the documentation for this playbook (https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SentinelSOARessentials/Playbooks/Send-Incident-Email-XDRPortal/readme.md)
+
+
+**Step 5: Analytic Rules**
+
+Analytic Rules use KQL in order to meet specific conditions. Once the condition is met an incident or alert will be generated. You can create KQL rules from scratch which is where the benifits of Microsot Sentinel start to show. To start off I would review the 'Rule templates' tab to see what Analytic Rules suit what you are trying to monitor.
+<img width="1481" height="897" alt="image" src="https://github.com/user-attachments/assets/ca7f0005-4dd5-4660-8112-247f95ad38e1" />
+
+In my experience I find its better to name rules a brief description in the title
+
