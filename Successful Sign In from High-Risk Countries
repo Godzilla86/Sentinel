@@ -1,0 +1,5 @@
+SigninLogs
+| sort by TimeGenerated desc //Ensures that the most recent logs are shown first
+| where (Location in~ ("CN", "RU", "IR", "KP")) //Defines high-risk locations. Add or remove locations by using ISO codes
+| where ResultSignature == "SUCCESS" //Only shows successful sign ins
+| project Location, UserPrincipalName, TimeGenerated, IPAddress, DeviceDetail
