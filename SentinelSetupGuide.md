@@ -87,7 +87,20 @@ Next we need to authorize the managed identity running the HTTP request to pull 
 **Step 5: Analytic Rules**
 
 Analytic Rules use KQL in order to meet specific conditions. Once the condition is met an incident or alert will be generated. You can create KQL rules from scratch which is where the benifits of Microsot Sentinel start to show. To start off I would review the 'Rule templates' tab to see what Analytic Rules suit what you are trying to monitor.
+
+**Tip:** In my experience I find its better to name the title of the rules based off a description of what the rule is doing e.g. User Sign-In from Different Countries Within 1 Hour instead of Impossible Sign-In
 <img width="1481" height="897" alt="image" src="https://github.com/user-attachments/assets/ca7f0005-4dd5-4660-8112-247f95ad38e1" />
 
-In my experience I find its better to name rules a brief description in the title
+
+**Tip:** I reccomend getting your query run time within or below the time set in the lookup time if you have a KQL relying on timespans. In this example the KQL is looking sign-in log within a 1 hour timespan so the lookup time is below 1 hour.
+<img width="2039" height="1233" alt="image" src="https://github.com/user-attachments/assets/e0bb2e29-d210-489b-a941-55e044d6333d" />
+
+
+**Tip:** When configuring rules I would advise to group alerts/incidents by Account to keep incidents tidy for each user.
+<img width="2044" height="1245" alt="image" src="https://github.com/user-attachments/assets/0de1db4c-6285-4404-8dfd-c61861b9f135" />
+
+
+
+
+
 
