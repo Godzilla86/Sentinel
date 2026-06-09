@@ -14,6 +14,7 @@ Everything here comes from real deployments I have configured. I've used these g
 - 📖 Step-by-step Sentinel setup and configuration guides
 - 🔍 Custom KQL (Kusto Query Language) detection rules
 - 🚨 Real-world threat scenarios with detection logic explained
+- 
 **Who this is for:**
 - Security engineers and IT professionals working with Microsoft Sentinel
 - Anyone evaluating or onboarding to Sentinel for the first time
