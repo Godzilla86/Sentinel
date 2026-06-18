@@ -1,4 +1,4 @@
-Microsoft Sentinel Low-Cost Setup Guide
+## Microsoft Sentinel Low-Cost Setup Guide
 
 This guide is based on my hands-on experience configuring Microsoft Sentinel.
 
@@ -9,7 +9,7 @@ It explains how to configure Microsoft Sentinel for a low-cost small business en
 Before following this guide, ensure you already have an Azure subscription. Based on experience, using a separate subscription makes cost tracking significantly easier.
 
 
-**Step 1: Onboarding**
+## Onboarding
 
 Deploy the ARM template from the official Microsoft Azure Sentinel GitHub repository. This template provides a clean, barebones starting point.
 <img width="1828" height="941" alt="image" src="https://github.com/user-attachments/assets/0c8e8fec-0a18-427d-a0b6-0502e905bcdb" />
@@ -29,7 +29,7 @@ Select your Essentials modules:
 These include useful playbooks for later automation.
 <img width="706" height="778" alt="image" src="https://github.com/user-attachments/assets/4917baec-e03d-4608-adcf-f60f8bfd9065" />
 
-**Recommended Initial Data Connectors**
+## Data Connectors
 
 Start with:
 - Office 365
@@ -39,7 +39,7 @@ Start with:
 
 <img width="819" height="789" alt="image" src="https://github.com/user-attachments/assets/6ea9c65f-2455-4716-a6e9-0647b3f50832" />
 
-**Tip:** Common Free Microsoft Data Connectors
+**Tip:** Free Microsoft Data Connectors
 
 - Azure AD Identity Protection (requires Entra ID P2)
 - Azure Activity (free)
@@ -50,7 +50,7 @@ Start with:
 
 If you aren't sure what your Microsoft 365 licensing entitles you to check out [m365maps.com](https://m365maps.com/)
 
-**Step 2: Configuration**
+## Setup
 
 Navigate to the **Microsoft Defender Portal:**
 
@@ -65,20 +65,14 @@ Once connected:
 - Data ingestion will begin
 <img width="563" height="905" alt="image" src="https://github.com/user-attachments/assets/6a958063-f066-4dfc-9650-3a9bac7599ef" />
 
-**Enable UEBA**
-
 Enable User and **Entity Behavior Analytics (UEBA)**
 This uses machine learning to detect anomalies and correlate suspicious activity across users and entities.
 
 <img width="911" height="817" alt="image" src="https://github.com/user-attachments/assets/1e276e63-722f-476a-9ce9-117450c0ea8a" />
 
-**Configure Playbook Permissions**
-
 Ensure proper permissions are configured so that Sentinel can execute Logic App playbooks.
 <img width="628" height="694" alt="image" src="https://github.com/user-attachments/assets/a3a25c3d-d95a-45de-8078-b53d6c336348" />
 
-
-**Step 3: Data Connectors**
 
 Navigate to:
 
@@ -92,7 +86,6 @@ You will see a list of connectors.
 
 <img width="1829" height="911" alt="image" src="https://github.com/user-attachments/assets/59d52438-8e5a-4f6f-a47b-16ee632de48b" />
 
-**Verify Data Ingestion**
 Open each connector and confirm:
 
 - Logs are enabled
@@ -113,7 +106,7 @@ For Entra ID:
 - Users with E5/A5 licenses receive 5 MB free ingestion per user per day
 
 
-**Step 4: Create Playbooks/Email Alerting**
+## Playbooks
 
 Navigate to:
 
@@ -153,7 +146,7 @@ Microsoft Sentinel → Automation → Automation Rules
 
 Following this configuration it means that when a new incident is created the playbook will run and gather information from the incident in Defender and send the email
 
-**Step 5: Analytic Rules**
+## Analytic Rules
 
 Analytic Rules use KQL (Kusto Query Language) to detect suspicious activity.
 
@@ -162,7 +155,7 @@ When conditions are met:
 - An alert is generated
 - An incident is created 
 
-**Getting Started**
+
 
 Analytic Rules → Rule Templates
 Start with prebuilt templates, then move to custom rules.
@@ -183,7 +176,7 @@ If your query reviews 1 hour of data → ensure execution runs within that windo
 <img width="2039" height="1233" alt="image" src="https://github.com/user-attachments/assets/e0bb2e29-d210-489b-a941-55e044d6333d" />
 
 
-**Tip:**Group alerts by Account
+**Tip:** Group alerts by Account
 
 This keeps incidents clean, organized, and user-focused
 <img width="2044" height="1245" alt="image" src="https://github.com/user-attachments/assets/0de1db4c-6285-4404-8dfd-c61861b9f135" />
