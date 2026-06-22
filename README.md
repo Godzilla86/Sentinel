@@ -28,6 +28,7 @@ Everything here comes from real deployments I have configured. I've used these g
 | [SentinelSetupGuide.md](./SentinelSetupGuide.md) | End-to-end setup guide for Microsoft Sentinel — workspace creation, data connectors, analytics rules, and SOAR playbooks |
 | [User Sign-In from Different Countries Within 1 Hour](./User%20Sign-In%20from%20Different%20Countries%20Within%201%20Hour) | KQL detection rule for impossible travel — flags logins from geographically impossible locations within a 1-hour window |
 | [Successful Sign In from High-Risk Countries](./Successful%20Sign%20In%20from%20High-Risk%20Countries) | KQL rule to alert on successful authentications originating from high-risk or sanctioned regions |
+| [BaslineRules](./BaselineRules.json) | Baseline rules I deploy for new sentinel instances around user detections and conditional access
  
 ---
  
