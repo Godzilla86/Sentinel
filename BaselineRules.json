@@ -1,0 +1,1227 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/4181393b-f774-4f04-8dbd-b28a8b960908')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/4181393b-f774-4f04-8dbd-b28a8b960908')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "Mail redirect via ExO transport rule",
+                "description": "Identifies when Exchange Online transport rule configured to forward emails.\nThis could be an adversary mailbox configured to collect mail from multiple user accounts.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "OfficeActivity\n| where OfficeWorkload == \"Exchange\"\n| where Operation in~ (\"New-TransportRule\", \"Set-TransportRule\")\n| mv-apply DynamicParameters = todynamic(Parameters) on (summarize ParsedParameters = make_bag(pack(tostring(DynamicParameters.Name), DynamicParameters.Value)))\n| extend RuleName = case(\n    Operation =~ \"Set-TransportRule\", OfficeObjectId,\n    Operation =~ \"New-TransportRule\", ParsedParameters.Name,\n    \"Unknown\")\n| mv-expand ExpandedParameters = todynamic(Parameters)\n| where ExpandedParameters.Name in~ (\"BlindCopyTo\", \"RedirectMessageTo\") and isnotempty(ExpandedParameters.Value)\n| extend RedirectTo = ExpandedParameters.Value\n| extend ClientIPValues = extract_all(@'\\[?(::ffff:)?(?P<IPAddress>(\\d+\\.\\d+\\.\\d+\\.\\d+)|[^\\]]+)\\]?([-:](?P<Port>\\d+))?', dynamic([\"IPAddress\", \"Port\"]), ClientIP)[0]\n| extend From = ParsedParameters.From\n| project TimeGenerated, RedirectTo, IPAddress = tostring(ClientIPValues[0]), Port = tostring(ClientIPValues[1]), UserId, From, Operation, RuleName, Parameters\n| extend AccountName = tostring(split(UserId, \"@\")[0]), AccountUPNSuffix = tostring(split(UserId, \"@\")[1])\n",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "PT1H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Collection",
+                    "Exfiltration"
+                ],
+                "techniques": [
+                    "T1114",
+                    "T1020"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": "500415fb-bba7-4227-a08a-9857fb61b6a7",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "UserId"
+                            },
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountName"
+                            },
+                            {
+                                "identifier": "UPNSuffix",
+                                "columnName": "AccountUPNSuffix"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "IPAddress"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": "2.0.4"
+            }
+        },
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/6eb2ad30-f108-49a1-8f47-ff0f971fd737')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/6eb2ad30-f108-49a1-8f47-ff0f971fd737')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "Malicious Inbox Rule",
+                "description": "Often times after the initial compromise the attackers create inbox rules to delete emails that contain certain keywords.\n This is done so as to limit ability to warn compromised users that they've been compromised. Below is a sample query that tries to detect this.\nReference: https://www.reddit.com/r/sysadmin/comments/7kyp0a/recent_phishing_attempts_my_experience_and_what/",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "let Keywords = dynamic([\"helpdesk\", \" alert\", \" suspicious\", \"fake\", \"malicious\", \"phishing\", \"spam\", \"do not click\", \"do not open\", \"hijacked\", \"Fatal\"]);\nOfficeActivity\n| where OfficeWorkload =~ \"Exchange\" \n| where Operation =~ \"New-InboxRule\" and (ResultStatus =~ \"True\" or ResultStatus =~ \"Succeeded\")\n| where Parameters has \"Deleted Items\" or Parameters has \"Junk Email\"  or Parameters has \"DeleteMessage\"\n| extend Events=todynamic(Parameters)\n| parse Events  with * \"SubjectContainsWords\" SubjectContainsWords '}'*\n| parse Events  with * \"BodyContainsWords\" BodyContainsWords '}'*\n| parse Events  with * \"SubjectOrBodyContainsWords\" SubjectOrBodyContainsWords '}'*\n| where SubjectContainsWords has_any (Keywords)\n or BodyContainsWords has_any (Keywords)\n or SubjectOrBodyContainsWords has_any (Keywords)\n| extend ClientIPAddress = case( ClientIP has \".\", tostring(split(ClientIP,\":\")[0]), ClientIP has \"[\", tostring(trim_start(@'[[]',tostring(split(ClientIP,\"]\")[0]))), ClientIP )\n| extend Keyword = iff(isnotempty(SubjectContainsWords), SubjectContainsWords, (iff(isnotempty(BodyContainsWords),BodyContainsWords,SubjectOrBodyContainsWords )))\n| extend RuleDetail = case(OfficeObjectId contains '/' , tostring(split(OfficeObjectId, '/')[-1]) , tostring(split(OfficeObjectId, '\\\\')[-1]))\n| summarize count(), StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated) by  Operation, UserId, ClientIPAddress, ResultStatus, Keyword, OriginatingServer, OfficeObjectId, RuleDetail\n| extend AccountName = tostring(split(UserId, \"@\")[0]), AccountUPNSuffix = tostring(split(UserId, \"@\")[1])\n| extend OriginatingServerName = tostring(split(OriginatingServer, \" \")[0])\n",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P1D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Persistence",
+                    "DefenseEvasion"
+                ],
+                "techniques": [
+                    "T1098",
+                    "T1078"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": "7b907bf7-77d4-41d0-a208-5643ff75bf9a",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "UserId"
+                            },
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountName"
+                            },
+                            {
+                                "identifier": "UPNSuffix",
+                                "columnName": "AccountUPNSuffix"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "OriginatingServerName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "ClientIPAddress"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": "2.0.4"
+            }
+        },
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/54960ba4-d6ff-49c4-8f92-be45e448d889')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/54960ba4-d6ff-49c4-8f92-be45e448d889')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "Bulk Changes to Privileged Account Permissions",
+                "description": "Identifies when changes to multiple users permissions are changed at once. Investigate immediately if not a planned change. This setting could enable an attacker access to Azure subscriptions in your environment.\nRef : https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-identity-management",
+                "severity": "High",
+                "enabled": true,
+                "query": "let AdminRecords = AuditLogs\n| where Category =~ \"RoleManagement\"\n| where ActivityDisplayName has_any (\"Add eligible member to role\", \"Add member to role\")\n| mv-apply TargetResource = TargetResources on \n  (\n      where TargetResource.type =~ \"User\"\n      | extend TargetUserPrincipalName = tostring(TargetResource.userPrincipalName),\n               props = TargetResource.modifiedProperties\n  )\n| mv-apply Property = props on \n  (\n      where Property.displayName =~ \"Role.DisplayName\"\n      | extend RoleName = trim('\"',tostring(Property.newValue))\n  )\n| where RoleName contains \"Admin\";\nAdminRecords\n| summarize dcount(TargetUserPrincipalName) by bin(TimeGenerated, 1h)\n| where dcount_TargetUserPrincipalName > 9\n| join kind=rightsemi  (\n  AdminRecords\n  | extend TimeWindow = bin(TimeGenerated, 1h)\n) on $left.TimeGenerated == $right.TimeWindow\n| extend InitiatedByUser = iff(isnotempty(InitiatedBy.user.userPrincipalName), tostring(InitiatedBy.user.userPrincipalName), \"\")\n| extend InitiatingAppName = tostring(InitiatedBy.app.displayName)\n| extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)\n| extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)\n| extend InitiatingAadUserId = tostring(InitiatedBy.user.id)\n| extend InitiatingIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))\n| extend TargetName = tostring(split(TargetUserPrincipalName,'@',0)[0]), TargetUPNSuffix = tostring(split(TargetUserPrincipalName,'@',1)[0])\n| extend InitiatingAccountName = tostring(split(InitiatingUserPrincipalName, \"@\")[0]), InitiatingAccountUPNSuffix = tostring(split(InitiatingUserPrincipalName, \"@\")[1])\n",
+                "queryFrequency": "PT2H",
+                "queryPeriod": "PT2H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "PrivilegeEscalation"
+                ],
+                "techniques": [
+                    "T1078"
+                ],
+                "subTechniques": [
+                    "T1078.004"
+                ],
+                "alertRuleTemplateName": "218f60de-c269-457a-b882-9966632b9dc6",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "Selected",
+                        "groupByEntities": [
+                            "Account"
+                        ],
+                        "groupByAlertDetails": [
+                            "DisplayName"
+                        ],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": {
+                    "TargetUser": "TargetUserPrincipalName",
+                    "InitiatedByUser": "InitiatedByUser"
+                },
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "InitiatingAppName"
+                            },
+                            {
+                                "identifier": "AadUserId",
+                                "columnName": "InitiatingAppServicePrincipalId"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "TargetUserPrincipalName"
+                            },
+                            {
+                                "identifier": "Name",
+                                "columnName": "TargetName"
+                            },
+                            {
+                                "identifier": "UPNSuffix",
+                                "columnName": "TargetUPNSuffix"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "InitiatingUserPrincipalName"
+                            },
+                            {
+                                "identifier": "Name",
+                                "columnName": "InitiatingAccountName"
+                            },
+                            {
+                                "identifier": "UPNSuffix",
+                                "columnName": "InitiatingAccountUPNSuffix"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "AadUserId",
+                                "columnName": "InitiatingAadUserId"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "InitiatingIpAddress"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": "1.0.7"
+            }
+        },
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/1a55dc49-bde5-4ed5-9fef-f50f02cf0c87')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/1a55dc49-bde5-4ed5-9fef-f50f02cf0c87')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "Distributed Password cracking attempts in Microsoft Entra ID",
+                "description": "Identifies distributed password cracking attempts from the Microsoft Entra ID SigninLogs.\nThe query looks for unusually high number of failed password attempts coming from multiple locations for a user account.\nReferences: https://docs.microsoft.com/azure/active-directory/reports-monitoring/reference-sign-ins-error-codes\n50053   Account is locked because the user tried to sign in too many times with an incorrect user ID or password.\n50055   Invalid password, entered expired password.\n50056   Invalid or null password - Password does not exist in store for this user.\n50126   Invalid username or password, or invalid on-premises username or password.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "let s_threshold = 30;\nlet l_threshold = 3;\nlet aadFunc = (tableName:string){\ntable(tableName)\n| where OperationName =~ \"Sign-in activity\"\n// Error codes that we want to look at as they are related to the use of incorrect password.\n| where ResultType in (\"50126\", \"50053\" , \"50055\", \"50056\")\n| extend DeviceDetail = todynamic(DeviceDetail), Status = todynamic(DeviceDetail), LocationDetails = todynamic(LocationDetails)\n| extend OS = DeviceDetail.operatingSystem, Browser = DeviceDetail.browser\n| extend StatusCode = tostring(Status.errorCode), StatusDetails = tostring(Status.additionalDetails)\n| extend LocationString = strcat(tostring(LocationDetails.countryOrRegion), \"/\", tostring(LocationDetails.state), \"/\", tostring(LocationDetails.city))\n| summarize StartTime = min(TimeGenerated), EndTime = max(TimeGenerated), LocationCount=dcount(LocationString), Location = make_set(LocationString,100),\nIPAddress = make_set(IPAddress,100), IPAddressCount = dcount(IPAddress), AppDisplayName = make_set(AppDisplayName,100), ResultDescription = make_set(ResultDescription,50),\nBrowser = make_set(Browser,20), OS = make_set(OS,20), SigninCount = count() by UserPrincipalName, Type\n// Setting a generic threshold - Can be different for different environment\n| where SigninCount > s_threshold and LocationCount >= l_threshold\n| extend Location = tostring(Location), IPAddress = tostring(IPAddress), AppDisplayName = tostring(AppDisplayName), ResultDescription = tostring(ResultDescription), Browser = tostring(Browser), OS = tostring(OS)\n| extend Name = tostring(split(UserPrincipalName,'@',0)[0]), UPNSuffix = tostring(split(UserPrincipalName,'@',1)[0])};\nlet aadSignin = aadFunc(\"SigninLogs\");\nlet aadNonInt = aadFunc(\"AADNonInteractiveUserSignInLogs\");\nunion isfuzzy=true aadSignin, aadNonInt\n",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P1D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "CredentialAccess"
+                ],
+                "techniques": [
+                    "T1110"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": "bfb1c90f-8006-4325-98be-c7fffbc254d6",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "Selected",
+                        "groupByEntities": [
+                            "Account"
+                        ],
+                        "groupByAlertDetails": [
+                            "DisplayName"
+                        ],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "UserPrincipalName"
+                            },
+                            {
+                                "identifier": "Name",
+                                "columnName": "Name"
+                            },
+                            {
+                                "identifier": "UPNSuffix",
+                                "columnName": "UPNSuffix"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": "1.0.5"
+            }
+        },
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/bf404f76-9d00-4c4f-91c3-d4df6affd678')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/bf404f76-9d00-4c4f-91c3-d4df6affd678')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "User Assigned New Privileged Role",
+                "description": "Identifies when a new eligible or active privileged role is assigned to a user. Does not alert on PIM activations. Any account eligible for a role is now being given privileged access. If the assignment is unexpected or into a role that isn't the responsibility of the account holder, investigate.\nRef : https://docs.microsoft.com/azure/active-directory/fundamentals/security-operations-privileged-accounts#things-to-monitor-1",
+                "severity": "High",
+                "enabled": true,
+                "query": "AuditLogs\n| where Category =~ \"RoleManagement\"\n| where AADOperationType in (\"Assign\", \"AssignEligibleRole\", \"CreateRequestGrantedRole\", \"CreateRequestPermanentEligibleRole\", \"CreateRequestPermanentGrantedRole\")\n| where ActivityDisplayName has_any (\"Add eligible member to role\", \"Add member to role\")\n| mv-apply TargetResourceSubject = TargetResources on \n  (\n      where TargetResourceSubject.type in~ (\"User\", \"ServicePrincipal\")\n      | extend Target = iff(TargetResourceSubject.type =~ \"ServicePrincipal\", tostring(TargetResourceSubject.displayName), tostring(TargetResourceSubject.userPrincipalName)),\n               subjectProps = TargetResourceSubject.modifiedProperties\n  )\n| mv-apply TargetResourceRole = TargetResources on \n  (\n    // mimic modifiedProperties so we can use the same logic to get the role name regardless of where it comes from\n    where TargetResourceRole.type in~ (\"Role\")\n    | extend roleProps = pack_array(bag_pack(\"displayName\",\"Role.DisplayName\", \"newValue\", TargetResourceRole.displayName))\n  )\n| mv-apply Property = iff(array_length(subjectProps) > 0, subjectProps, roleProps) on \n  ( \n    where Property.displayName =~ \"Role.DisplayName\"\n      | extend RoleName = trim('\"',tostring(Property.newValue))\n  )\n| where RoleName contains \"Admin\"\n| extend InitiatingAppName = tostring(InitiatedBy.app.displayName)\n| extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)\n| extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)\n| extend InitiatingAadUserId = tostring(InitiatedBy.user.id)\n| extend InitiatingIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))\n| extend Initiator = iif(isnotempty(InitiatingAppName), InitiatingAppName, InitiatingUserPrincipalName)\n// Comment below to alert for PIM activations\n| where Initiator != \"MS-PIM\" and Initiator != \"MS-PIM-Fairfax\"\n| summarize by bin(TimeGenerated, 1h), OperationName, RoleName, Target, Initiator, InitiatingUserPrincipalName, InitiatingAadUserId, InitiatingAppName, InitiatingAppServicePrincipalId, InitiatingIpAddress, Result\n| extend TargetName = tostring(split(Target,'@',0)[0]), TargetUPNSuffix = tostring(split(Target,'@',1)[0]), InitiatorName = tostring(split(InitiatingUserPrincipalName,'@',0)[0]), InitiatorUPNSuffix = tostring(split(InitiatingUserPrincipalName,'@',1)[0])\n",
+                "queryFrequency": "PT2H",
+                "queryPeriod": "PT2H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Persistence"
+                ],
+                "techniques": [
+                    "T1078"
+                ],
+                "subTechniques": [
+                    "T1078.004"
+                ],
+                "alertRuleTemplateName": "746ddb63-f51b-4563-b449-a8b13cf302ec",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "Selected",
+                        "groupByEntities": [
+                            "Account"
+                        ],
+                        "groupByAlertDetails": [
+                            "DisplayName"
+                        ],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "Target"
+                            },
+                            {
+                                "identifier": "Name",
+                                "columnName": "TargetName"
+                            },
+                            {
+                                "identifier": "UPNSuffix",
+                                "columnName": "TargetUPNSuffix"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "InitiatingUserPrincipalName"
+                            },
+                            {
+                                "identifier": "Name",
+                                "columnName": "InitiatorName"
+                            },
+                            {
+                                "identifier": "UPNSuffix",
+                                "columnName": "InitiatorUPNSuffix"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "AadUserId",
+                                "columnName": "InitiatingAadUserId"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "AadUserId",
+                                "columnName": "InitiatingAppServicePrincipalId"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "InitiatingIpAddress"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": "1.0.2"
+            }
+        },
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/755ef641-a12a-4215-a530-f7f43ba187fd')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/755ef641-a12a-4215-a530-f7f43ba187fd')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "NRT",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "NRT User added to Microsoft Entra ID Privileged Groups",
+                "description": "This will alert when a user is added to any of the Privileged Groups.\nFor further information on AuditLogs please see https://docs.microsoft.com/azure/active-directory/reports-monitoring/reference-audit-activities.\nFor Administrator role permissions in Microsoft Entra ID please see https://docs.microsoft.com/azure/active-directory/users-groups-roles/directory-assign-admin-roles",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "let OperationList = dynamic([\"Add member to role\",\"Add eligible member to role\"]);\nlet PrivilegedGroups = dynamic([\"UserAccountAdmins\",\"PrivilegedRoleAdmins\",\"TenantAdmins\",\"PrivilegedAuthenticationAdmins\"]);\nAuditLogs\n| where Category =~ \"RoleManagement\"\n| where OperationName in~ (OperationList)\n| mv-apply TargetResource = TargetResources on \n  (\n      where TargetResource.type =~ \"User\"\n      | extend TargetUserPrincipalName = tostring(TargetResource.userPrincipalName),\n               modProps = TargetResource.modifiedProperties\n  )\n| mv-apply Property = modProps on \n  (\n      where Property.displayName =~ \"Role.WellKnownObjectName\"\n      | extend DisplayName = trim('\"',tostring(Property.displayName)),\n               GroupName = trim('\"',tostring(Property.newValue))\n  )\n| extend InitiatingAppId = tostring(InitiatedBy.app.appId)\n| extend InitiatingAppName = tostring(InitiatedBy.app.displayName)\n| extend InitiatingAppServicePrincipalId = tostring(InitiatedBy.app.servicePrincipalId)\n| extend InitiatingAppServicePrincipalName = tostring(InitiatedBy.app.servicePrincipalName)\n| extend InitiatingUserPrincipalName = tostring(InitiatedBy.user.userPrincipalName)\n| extend InitiatingAadUserId = tostring(InitiatedBy.user.id)\n| extend InitiatingIpAddress = tostring(iff(isnotempty(InitiatedBy.user.ipAddress), InitiatedBy.user.ipAddress, InitiatedBy.app.ipAddress))        \n| extend InitiatingUserRoles = InitiatedBy.user.roles\n| where GroupName in~ (PrivilegedGroups)\n// If you don't want to alert for operations from PIM, remove below filtering for MS-PIM.\n//| where InitiatingAppName != \"MS-PIM\" and InitiatingAppName != \"MS-PIM-Fairfax\"\n| project TimeGenerated, AADOperationType, Category, OperationName, AADTenantId, InitiatingUserPrincipalName, InitiatingAadUserId, InitiatingAppName, InitiatingAppId, InitiatingAppServicePrincipalId, InitiatingIpAddress, InitiatingUserRoles, DisplayName, GroupName, TargetUserPrincipalName\n| extend InitiatedByName = tostring(split(InitiatingUserPrincipalName,'@',0)[0]), InitiatedByUPNSuffix = tostring(split(InitiatingUserPrincipalName,'@',1)[0])\n| extend TargetName = tostring(split(TargetUserPrincipalName,'@',0)[0]), TargetUPNSuffix = tostring(split(TargetUserPrincipalName,'@',1)[0])\n",
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "tactics": [
+                    "Persistence",
+                    "PrivilegeEscalation"
+                ],
+                "techniques": [
+                    "T1098",
+                    "T1078"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": "70fc7201-f28e-4ba7-b9ea-c04b96701f13",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "Selected",
+                        "groupByEntities": [
+                            "Account"
+                        ],
+                        "groupByAlertDetails": [
+                            "DisplayName"
+                        ],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "InitiatingUserPrincipalName"
+                            },
+                            {
+                                "identifier": "Name",
+                                "columnName": "InitiatedByName"
+                            },
+                            {
+                                "identifier": "UPNSuffix",
+                                "columnName": "InitiatedByUPNSuffix"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "TargetUserPrincipalName"
+                            },
+                            {
+                                "identifier": "Name",
+                                "columnName": "TargetName"
+                            },
+                            {
+                                "identifier": "UPNSuffix",
+                                "columnName": "TargetUPNSuffix"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "AadUserId",
+                                "columnName": "InitiatingAadUserId"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "AadUserId",
+                                "columnName": "InitiatingAppServicePrincipalId"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "InitiatingIpAddress"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": "1.0.7"
+            }
+        },
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/9f7984db-39ee-4f73-929a-4994c82f82ed')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/9f7984db-39ee-4f73-929a-4994c82f82ed')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "MFA Spamming followed by Successful login",
+                "description": "Identifies MFA Spamming followed by Successful logins and by a successful authentication within a given time window.\nDefault Failure count is 10 and 1 successful login with default Time Window is 5 minutes.",
+                "severity": "High",
+                "enabled": true,
+                "query": "// Filter for sign-in logs ingested within the last day\nSigninLogs\n| where ingestion_time() > ago(1d)\n// Filter for records with AuthenticationRequirement set to multiFactorAuthentication\n| where AuthenticationRequirement == \"multiFactorAuthentication\"\n// Extract information from dynamic columns DeviceDetail and LocationDetails\n| extend DeviceDetail = todynamic(DeviceDetail), LocationDetails = todynamic(LocationDetails)\n// Extract specific attributes from DeviceDetail and LocationDetails\n| extend\n      OS = tostring(DeviceDetail.operatingSystem),\n      Browser = tostring(DeviceDetail.browser),\n      State = tostring(LocationDetails.state),\n      City = tostring(LocationDetails.city),\n      Region = tostring(LocationDetails.countryOrRegion)\n// Expand multi-value property AuthenticationDetails into separate records\n| mv-expand todynamic(AuthenticationDetails)\n// Parse AuthResult from JSON in AuthenticationDetails and convert to string\n| extend AuthResult = tostring(parse_json(AuthenticationDetails).authenticationStepResultDetail)\n// Summarize data by aggregating statistics for each user, IP, and AuthResult\n| summarize FailedAttempts = countif(AuthResult == \"MFA denied; user declined the authentication\" or AuthResult == \"MFA denied; user did not respond to mobile app notification\"), SuccessfulAttempts = countif(AuthResult == \"MFA successfully completed\"), InvolvedOS = make_set(OS, 5), InvolvedBrowser = make_set(Browser), StartTime = min(TimeGenerated), EndTime = max(TimeGenerated) by UserPrincipalName, IPAddress, State, City, Region\n// Calculate AuthenticationWindow by finding time difference between start and end times\n| extend AuthenticationWindow = (EndTime - StartTime)\n// Filter for records with more than 10 failed attempts in 5-minute window and at least 1 successful attempt\n| where FailedAttempts > 10 and AuthenticationWindow <= 5m and SuccessfulAttempts >= 1\n// Extract user's name and UPN suffix using split function\n| extend Name = tostring(split(UserPrincipalName, '@', 0)[0]), UPNSuffix = tostring(split(UserPrincipalName, '@', 1)[0])\n",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P1D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "CredentialAccess"
+                ],
+                "techniques": [
+                    "T1110"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": "a8cc6d5c-4e7e-4b48-b4ac-d8a116c62a8b",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "Selected",
+                        "groupByEntities": [
+                            "Account"
+                        ],
+                        "groupByAlertDetails": [
+                            "DisplayName"
+                        ],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "UserPrincipalName"
+                            },
+                            {
+                                "identifier": "Name",
+                                "columnName": "Name"
+                            },
+                            {
+                                "identifier": "UPNSuffix",
+                                "columnName": "UPNSuffix"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "IPAddress"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": "1.0.4"
+            }
+        },
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/411aa8da-5741-4cec-b0ad-3f155c43dfc7')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/411aa8da-5741-4cec-b0ad-3f155c43dfc7')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "NRT",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "Successful Sign In from High-Risk Countries",
+                "description": "Successful Sign In from state sponsored threat actor locations e.g. China, Russia, Iran or North Korea. Sign ins from these locations could be an indication of a possible account compromise.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "SigninLogs\r\n| sort by TimeGenerated desc //Ensures that the most recent logs are shown first\r\n| where (Location in~ (\"CN\", \"RU\", \"IR\", \"KP\")) //Defines high-risk locations. Add or remove locations by using ISO codes\r\n| where ResultSignature == \"SUCCESS\" //Only shows successful sign ins\r\n| project Location, UserPrincipalName, TimeGenerated, IPAddress, DeviceDetail",
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "tactics": [
+                    "InitialAccess"
+                ],
+                "techniques": [],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT1H",
+                        "matchingMethod": "Selected",
+                        "groupByEntities": [
+                            "Account"
+                        ],
+                        "groupByAlertDetails": [
+                            "DisplayName"
+                        ],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "{{{UserPrincipalName}} has signed in High-Risk Country {{{Location}} ",
+                    "alertDescriptionFormat": "Sign In took place at {{{TimeGenerated}} from {{{Location}} with the IP address of {{{IPAddress}} ",
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {},
+                "entityMappings": [
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "IPAddress"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "UserPrincipalName"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        },
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/49e5e6b3-bdd4-447e-bd7f-d75486c5a84a')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/49e5e6b3-bdd4-447e-bd7f-d75486c5a84a')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "User Sign-In from Different Countries Within 1 Hour",
+                "description": "Detects if a use have performed an impossible sign in by traveling to a different country with in less than 1 hour. This is typically a indication of a possible compromise of a breached user or a user actively using VPN.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "//Listed outsourced staff exclusions\r\n//let PhilippinesUsers = dynamic([\"\"]); //Defines users listed in Philippines by UPN.\r\n//let Philippines = \"PH\"; //Allows Philippines to be referenced.\r\n//let VMCountry = \"AU\"; //Set Australia to be allowed as our Windows 365 are located in Australia.\r\nSigninLogs\r\n| where ResultSignature == \"SUCCESS\" //Only shows successful sign-ins.\r\n| sort by UserPrincipalName asc, TimeGenerated asc //Organises logs to group by user and time generated in order.\r\n| serialize //locks rows in order\r\n| extend PreviousUser = prev(UserPrincipalName)//Defines PreviousUser to have the ability to look at the previous value of UserPrincipalName in the previous sign in log.\r\n| extend PreviousLocation = prev(Location) //Defines PreviousLocation to have the ability look at the value of Location in previous sign in log.\r\n| extend PreviousTime = prev(TimeGenerated) //Defines PreviousTime to have the ability to look at the value of TimeGenerated in the previous sign in log.\r\n| where isnotempty(PreviousLocation) //Ensures that the previous location has a value and is not empty.\r\n| where UserPrincipalName == PreviousUser //Ensures that the user matches the previous user value.\r\n| where Location != PreviousLocation //Ensures that only sign in logs the don't match previous sign in locations.\r\n| extend TimeDifference = (TimeGenerated - PreviousTime) //Defines TimeDifference to have the ability to look at the most recent sign in time and subtract the previous recent sign in time.\r\n| where TimeDifference < 1h //Filters logs to only show sign in with less than a 1hr time span\r\n//| where not (\r\n//    UserPrincipalName in (PhilippinesUsers)\r\n//    and (\r\n//        (PreviousLocation has Philippines and Location has VMCountry) or\r\n//        (PreviousLocation has VMCountry and Location has Philippines\r\n//        )\r\n//    ))\r\n| project TimeGenerated, UserPrincipalName, PreviousLocation, Location, PreviousTime, TimeDifference",
+                "queryFrequency": "PT5M",
+                "queryPeriod": "PT2H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "InitialAccess"
+                ],
+                "techniques": [],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT2H",
+                        "matchingMethod": "Selected",
+                        "groupByEntities": [
+                            "Account"
+                        ],
+                        "groupByAlertDetails": [
+                            "DisplayName"
+                        ],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": {
+                    "alertDisplayNameFormat": "Impossible Sign-In Activity {{{UserPrincipalName}} ",
+                    "alertDescriptionFormat": "This alert detects a user signing in from two different countries within a short time window (less than 1 hour), indicating potential credential compromise or VPN usage.\n\nPrevious Location: {{PreviousLocation}}\nNew Location: {{Location}}\nTime Difference : {{{TimeDifference}} \n\nInvestigate whether the activity is legitimate (VPN, travel) or suspicious (account compromise).",
+                    "alertDynamicProperties": []
+                },
+                "customDetails": {},
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "UserPrincipalName"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        },
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/a372f7b1-7626-4f3d-be81-8f0032fef047')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/a372f7b1-7626-4f3d-be81-8f0032fef047')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "Conditional Access - A Conditional Access policy was put into report-only mode",
+                "description": "A Conditional Access policy was put into report-only mode in Entra ID.",
+                "severity": "Low",
+                "enabled": true,
+                "query": "// A Conditional Access policy was put into report-only mode.\nAuditLogs\n| where OperationName in (\"Update conditional access policy\")\n| extend stateOld = extractjson(\"$.state\", tostring(TargetResources[0].modifiedProperties[0].oldValue))\n| extend stateNew = extractjson(\"$.state\", tostring(TargetResources[0].modifiedProperties[0].newValue))\n| where stateOld == \"enabled\" and stateNew == \"enabledForReportingButNotEnforced\"\n| extend modifiedBy = tostring(InitiatedBy.user.userPrincipalName)\n| extend accountName = tostring(split(modifiedBy, \"@\")[0])\n| extend upnSuffix = tostring(split(modifiedBy, \"@\")[1])\n| project\n    TimeGenerated,\n    OperationName,\n    policy = TargetResources[0].displayName,\n    modifiedBy,\n    accountName,\n    upnSuffix,\n    result = Result,\n    stateOld,\n    stateNew\n| order by TimeGenerated desc\n",
+                "queryFrequency": "PT5M",
+                "queryPeriod": "PT5M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "DefenseEvasion"
+                ],
+                "techniques": [
+                    "T1562"
+                ],
+                "subTechniques": [
+                    "T1562.007"
+                ],
+                "alertRuleTemplateName": "5588de32-73b1-40b9-bddc-4d9e74051859",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5M",
+                        "matchingMethod": "Selected",
+                        "groupByEntities": [
+                            "Account"
+                        ],
+                        "groupByAlertDetails": [
+                            "DisplayName"
+                        ],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "accountName"
+                            },
+                            {
+                                "identifier": "UPNSuffix",
+                                "columnName": "upnSuffix"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": "1.0.1"
+            }
+        },
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/8d21a156-f15a-43d1-a82f-11497a9d6264')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/8d21a156-f15a-43d1-a82f-11497a9d6264')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "Conditional Access - A Conditional Access policy was disabled",
+                "description": "A Conditional Access policy was disabled in Entra ID.",
+                "severity": "Low",
+                "enabled": true,
+                "query": "// A Conditional Access policy was disabled.\nAuditLogs\n| where OperationName in (\"Update conditional access policy\")\n| extend stateOld = extractjson(\"$.state\", tostring(TargetResources[0].modifiedProperties[0].oldValue))\n| extend stateNew = extractjson(\"$.state\", tostring(TargetResources[0].modifiedProperties[0].newValue))\n| where stateOld == \"enabled\" and stateNew == \"disabled\"\n| extend modifiedBy = tostring(InitiatedBy.user.userPrincipalName)\n| extend accountName = tostring(split(modifiedBy, \"@\")[0])\n| extend upnSuffix = tostring(split(modifiedBy, \"@\")[1])\n| project\n    TimeGenerated,\n    OperationName,\n    policy = TargetResources[0].displayName,\n    modifiedBy,\n    accountName,\n    upnSuffix,\n    result = Result,\n    stateOld,\n    stateNew\n| order by TimeGenerated desc\n",
+                "queryFrequency": "PT5M",
+                "queryPeriod": "PT5M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "DefenseEvasion"
+                ],
+                "techniques": [
+                    "T1562"
+                ],
+                "subTechniques": [
+                    "T1562.007"
+                ],
+                "alertRuleTemplateName": "40702da1-ae8a-4e46-ac1f-9327ca6ef588",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT1H",
+                        "matchingMethod": "Selected",
+                        "groupByEntities": [
+                            "Account"
+                        ],
+                        "groupByAlertDetails": [
+                            "DisplayName"
+                        ],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "accountName"
+                            },
+                            {
+                                "identifier": "UPNSuffix",
+                                "columnName": "upnSuffix"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": "1.0.1"
+            }
+        },
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/247f3675-be63-4d3b-bb75-ad39f9defe0b')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/247f3675-be63-4d3b-bb75-ad39f9defe0b')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "Conditional Access - A Conditional Access user/group/role exclusion has changed",
+                "description": "A Conditional Access user/group/role exclusion has changed in Azure AD.",
+                "severity": "High",
+                "enabled": true,
+                "query": "// A Conditional Access user/group/role exclusion has changed.\nAuditLogs\n| where OperationName in (\"Update conditional access policy\")\n| extend excludeUsersOld = extractjson(\"$.conditions.users.excludeUsers\", tostring(TargetResources[0].modifiedProperties[0].oldValue))\n| extend excludeGroupsOld = extractjson(\"$.conditions.users.excludeGroups\", tostring(TargetResources[0].modifiedProperties[0].oldValue))\n| extend excludeRolesOld = extractjson(\"$.conditions.users.excludeRoles\", tostring(TargetResources[0].modifiedProperties[0].oldValue))\n| extend excludeUsersNew = extractjson(\"$.conditions.users.excludeUsers\", tostring(TargetResources[0].modifiedProperties[0].newValue))\n| extend excludeGroupsNew = extractjson(\"$.conditions.users.excludeGroups\", tostring(TargetResources[0].modifiedProperties[0].newValue))\n| extend excludeRolesNew = extractjson(\"$.conditions.users.excludeRoles\", tostring(TargetResources[0].modifiedProperties[0].newValue))\n| where excludeUsersOld != excludeUsersNew or excludeGroupsOld != excludeGroupsNew or excludeRolesOld != excludeRolesNew\n| extend modifiedBy = tostring(InitiatedBy.user.userPrincipalName)\n| extend accountName = tostring(split(modifiedBy, \"@\")[0])\n| extend upnSuffix = tostring(split(modifiedBy, \"@\")[1])\n| project TimeGenerated, OperationName, policy = TargetResources[0].displayName, modifiedBy, accountName, upnSuffix, result = Result,\n          excludeUsersOld, excludeUsersNew, excludeGroupsOld, excludeGroupsNew, excludeRolesOld, excludeRolesNew\n| order by TimeGenerated desc\n",
+                "queryFrequency": "PT5M",
+                "queryPeriod": "PT5M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Persistence",
+                    "DefenseEvasion",
+                    "CredentialAccess"
+                ],
+                "techniques": [
+                    "T1098",
+                    "T1078"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": "2ce7f00d-3b3c-41b9-ae9a-b79c19d2394e",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT1H",
+                        "matchingMethod": "Selected",
+                        "groupByEntities": [
+                            "Account"
+                        ],
+                        "groupByAlertDetails": [
+                            "DisplayName"
+                        ],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "accountName"
+                            },
+                            {
+                                "identifier": "UPNSuffix",
+                                "columnName": "upnSuffix"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": "1.0.1"
+            }
+        },
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/34d5aa34-70e8-4301-9c35-6a42eeeaae07')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/34d5aa34-70e8-4301-9c35-6a42eeeaae07')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "Conditional Access - A Conditional Access policy was updated",
+                "description": "A Conditional Access policy was updated in Entra ID.",
+                "severity": "Informational",
+                "enabled": true,
+                "query": "// A Conditional Access policy was updated.\nAuditLogs\n| where OperationName == \"Update conditional access policy\"\n| extend\n    policy = tostring(TargetResources[0].displayName),\n    modifiedBy = tostring(InitiatedBy.user.userPrincipalName),\n    oldPolicy = tostring(TargetResources[0].modifiedProperties[0].oldValue),\n    newPolicy = tostring(TargetResources[0].modifiedProperties[0].newValue)\n| extend\n    accountName = tostring(split(modifiedBy, \"@\")[0]),\n    upnSuffix = tostring(split(modifiedBy, \"@\")[1])\n| project\n    TimeGenerated,\n    OperationName,\n    policy,\n    modifiedBy,\n    accountName,\n    upnSuffix,\n    oldPolicy,\n    newPolicy,\n    Result\n\n",
+                "queryFrequency": "PT5M",
+                "queryPeriod": "PT5M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "DefenseEvasion"
+                ],
+                "techniques": [
+                    "T1562"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": "ccca6b88-a7b6-41c9-9be2-fc3daeb65b26",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT1H",
+                        "matchingMethod": "Selected",
+                        "groupByEntities": [
+                            "Account"
+                        ],
+                        "groupByAlertDetails": [
+                            "DisplayName"
+                        ],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "accountName"
+                            },
+                            {
+                                "identifier": "UPNSuffix",
+                                "columnName": "upnSuffix"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": "1.0.1"
+            }
+        },
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/1b88796c-9d22-4430-8f67-eb806a87aea4')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/1b88796c-9d22-4430-8f67-eb806a87aea4')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "Conditional Access - A new Conditional Access policy was created",
+                "description": "A new Conditional Access policy was created in Entra ID.",
+                "severity": "Informational",
+                "enabled": true,
+                "query": "// A new Conditional Access policy was created.\nAuditLogs\n| where OperationName in (\"Add conditional access policy\")\n| extend modifiedBy = tostring(InitiatedBy.user.userPrincipalName)\n| extend accountName = tostring(split(modifiedBy, \"@\")[0])\n| extend upnSuffix = tostring(split(modifiedBy, \"@\")[1])\n| project\n    TimeGenerated,\n    OperationName,\n    policy = TargetResources[0].displayName,\n    modifiedBy,\n    accountName,\n    upnSuffix,\n    result = Result,\n    newPolicy = TargetResources[0].modifiedProperties[0].newValue\n| order by TimeGenerated desc\n",
+                "queryFrequency": "PT5M",
+                "queryPeriod": "PT5M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "DefenseEvasion"
+                ],
+                "techniques": [
+                    "T1562"
+                ],
+                "subTechniques": [
+                    "T1562.007"
+                ],
+                "alertRuleTemplateName": "0459a1b5-909d-4783-9e27-24536b05a47f",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT1H",
+                        "matchingMethod": "Selected",
+                        "groupByEntities": [
+                            "Account"
+                        ],
+                        "groupByAlertDetails": [
+                            "DisplayName"
+                        ],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "accountName"
+                            },
+                            {
+                                "identifier": "UPNSuffix",
+                                "columnName": "upnSuffix"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": "1.0.1"
+            }
+        },
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/b3946825-d7f6-4aa9-ba32-ef819d8591ec')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/b3946825-d7f6-4aa9-ba32-ef819d8591ec')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "Conditional Access - A Conditional Access policy was deleted",
+                "description": "A Conditional Access policy was deleted from Entra ID.",
+                "severity": "Low",
+                "enabled": true,
+                "query": "// A Conditional Access policy was deleted.\nAuditLogs\n| where OperationName in (\"Delete conditional access policy\")\n| extend modifiedBy = tostring(InitiatedBy.user.userPrincipalName)\n| extend accountName = tostring(split(modifiedBy, \"@\")[0])\n| extend upnSuffix = tostring(split(modifiedBy, \"@\")[1])\n| project\n    TimeGenerated,\n    OperationName,\n    policy = TargetResources[0].displayName,\n    modifiedBy,\n    accountName,\n    upnSuffix,\n    result = Result,\n    oldPolicy = TargetResources[0].modifiedProperties[0].oldValue\n| order by TimeGenerated desc\n",
+                "queryFrequency": "PT5M",
+                "queryPeriod": "PT5M",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "DefenseEvasion"
+                ],
+                "techniques": [
+                    "T1562"
+                ],
+                "subTechniques": [
+                    "T1562.007"
+                ],
+                "alertRuleTemplateName": "2e96fa64-ac4d-4c92-b79e-e9c54b5d8230",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": true,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT1H",
+                        "matchingMethod": "Selected",
+                        "groupByEntities": [
+                            "Account"
+                        ],
+                        "groupByAlertDetails": [
+                            "DisplayName"
+                        ],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "AlertPerResult"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "accountName"
+                            },
+                            {
+                                "identifier": "UPNSuffix",
+                                "columnName": "upnSuffix"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": "1.0.1"
+            }
+        }
+    ]
+}
