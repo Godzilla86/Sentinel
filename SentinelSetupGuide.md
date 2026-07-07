@@ -105,47 +105,6 @@ For Entra ID:
 
 - Users with E5/A5 licenses receive 5 MB free ingestion per user per day
 
-
-## Playbooks
-
-Navigate to:
-
-Microsoft Sentinel → Automation → Playbooks
-Create a playbook using Azure Logic Apps. For this example, use the prebuilt playbook: **“Send Incident Email with XDR” (included in SOAR Essentials)**
-<img width="1802" height="897" alt="image" src="https://github.com/user-attachments/assets/a5d8e7ea-6543-4947-aafd-032929ed7fd5" />
-
-**Tip:** I would advise looking up documentation for your ITSM platform as there is most likely an API intergration that will allow the email to come through on your ticketing board with enriched infromation before the initial ticket triaged e.g. Customer name, severity, hyperlinks, enhanced formatting etc.
-
-<img width="1474" height="877" alt="image" src="https://github.com/user-attachments/assets/468b17b3-bb58-41ad-b068-2a3da9305b08" />
-
-Create the playbook and enter details.
-<img width="1145" height="642" alt="image" src="https://github.com/user-attachments/assets/ea72686d-e19d-4129-abdc-859d2da6ffd8" />
-
-You will notice as you are about to create the playbook that two new connections will be made. One is a managed identity Sentinel can connect to run the playbook and the other is a Office 365 Outlook connection to email the incident.
-<img width="1070" height="893" alt="image" src="https://github.com/user-attachments/assets/51d6db2d-436a-4c9e-ad0a-6281b7ab7682" />
-
-Enter the Logic App and configure your choice of email for the Outlook 365 connection
-<img width="1897" height="912" alt="image" src="https://github.com/user-attachments/assets/679d02e0-104d-4c52-8997-55d917b89b9c" />
-<img width="619" height="364" alt="image" src="https://github.com/user-attachments/assets/6f004c0d-9d77-4888-ab4b-eb4c5ed50741" />
-
-Next we need to authorize the system identity running the HTTP request to pull data from Defender and enrich the email. Run the script found in the documentation for this playbook (https://github.com/Azure/Azure-Sentinel/blob/master/Solutions/SentinelSOARessentials/Playbooks/Send-Incident-Email-XDRPortal/readme.md)
-
-**Tip** Use a user-assigned managed identity rather than a system-assigned identity. This allows:
-
-- Better auditing
-- Reuse across multiple playbooks
-- Centralized permission management
-
-In order to get the email sent every time there is a new incident we need to attact the book to a automation rule. 
-
-Navigate to:
-Microsoft Sentinel → Automation → Automation Rules
-
-<img width="1066" height="1258" alt="image" src="https://github.com/user-attachments/assets/b0d2d354-6479-4c57-91af-0852be10abdb" />
-
-
-Following this configuration it means that when a new incident is created the playbook will run and gather information from the incident in Defender and send the email
-
 ## Analytic Rules
 
 Analytic Rules use KQL (Kusto Query Language) to detect suspicious activity.
